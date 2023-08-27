@@ -48,6 +48,8 @@
 ;;; Code:
 
 (require 'hydra)
+(require 'compile)
+(require 'ansi-color)
 
 (defgroup vunit nil
   "VUnit HDL Interface for Emacs."
@@ -110,6 +112,8 @@ If set to nil choose automatically the first available in the $PATH."
 (defconst vunit--flag-fail-fast "--fail-fast")
 (defconst vunit--flag-log-level "--log-level debug")
 
+(defconst vunit--compilation-buffer "*vunit*")
+
 (defvar vunit-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-x x") #'vunit-buffer-menu/body)
@@ -132,6 +136,12 @@ If set to nil choose automatically the first available in the $PATH."
   "Beginning of testcase identifiers after vunit list.")
 
 ;;; internal functions
+
+(define-compilation-mode vunit-compilation-mode "Compile VUnit tests"
+  "Compilation Mode for VUnit."
+  (add-hook 'compilation-filter-hook (lambda () (ansi-color-apply-on-region compilation-filter-start (point))) nil :local)
+  (setq truncate-lines t)
+  (goto-char (point-max)))
 
 (defun vunit-open-script ()
   "Open vunit script."
@@ -312,7 +322,7 @@ If none were selected start new selection."
 
 (defun vunit--format-call-string (param)
   "Format the VUnit call-string with `PARAM'."
-  (format "%s%s %s %s --output-path %s --no-color --num-threads %d %s"
+  (format "%s%s %s %s --output-path %s --num-threads %d %s"
           (if vunit-simulator (concat "VUNIT_SIMULATOR=" vunit-simulator " ") "")
           vunit-python-executable
           (vunit--run-script-path)
@@ -332,7 +342,10 @@ If none were selected start new selection."
 
 (defun vunit--run (param)
   "Run VUnit python script with `PARAM'."
-  (compile (vunit--format-call-string param)))
+  (compilation-start
+   (vunit--format-call-string param)
+   #'vunit-compilation-mode
+   (lambda (_mode) vunit--compilation-buffer)))
 
 (defun vunit--run-script-path ()
   "Full absolute path to the run script."
@@ -435,7 +448,7 @@ _x_: Clean             ^ ^              _t_: Cursor                _p_: Fail-Fas
   ("d" (vunit-toggle-flag vunit--flag-log-level) nil :color pink))
 
 (easy-menu-define vunit-menu vunit-mode-map
-  "Vunit Menu"
+  "Vunit Menu."
   '("Vunit"
     :visible vunit-mode
     ("Basic"
